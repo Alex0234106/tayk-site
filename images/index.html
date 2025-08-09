@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TAYK</title>
+  <style>
+    :root{
+      --bg:#000;
+      --red:#ef2d2d;
+      --green:#16d45f;
+      --txt:#ddd;
+      --panel:#0e0e0e;
+      --border:#222;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--txt);
+      font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Arial,sans-serif;
+      overflow:hidden; /* без скролла, всё в фуллскрине */
+    }
+
+    /* Лейаут: две канвы по бокам для “дождя”, контент по центру */
+    .wrap{
+      position:relative;
+      width:100%;
+      height:100%;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) minmax(280px,900px) minmax(0,1fr);
+      gap:0;
+    }
+    canvas.matrix{
+      width:100%;
+      height:100%;
+      display:block;
+      background:transparent;
+    }
+    .center{
+      position:relative;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+    }
+
+    /* Карточка состояния */
+    .card{
+      width:min(900px,100%);
+      background:rgba(10,10,10,.6);
+      border:1px solid var(--border);
+      border-radius:18px;
+      box-shadow:0 10px 30px rgba(0,0,0,.45), inset 0 0 40px rgba(255,255,255,.02);
+      padding:24px;
+      backdrop-filter: blur(4px);
+      text-align:center;
+    }
+    .title{
+      letter-spacing:.12em;
+      margin:0 0 10px;
+      opacity:.85;
+      font-weight:700;
+    }
+    .status{
+      margin:4px 0 22px;
+      opacity:.75;
+    }
+
+    /* Картинка-череп */
+    .skull{
+      width: min(480px, 60vw);
+      max-width: 92%;
+      margin:16px auto 10px;
+      display:block;
+      filter: drop-shadow(0 0 22px rgba(255,255,255,.06));
+      user-select:none;
+      -webkit-user-drag:none;
+    }
+
+    /* “Живость” зелёного черепа: лёгкое дыхание и свечение */
+    .skull--green{
+      animation:
+        breathe 3.6s ease-in-out infinite,
+        greenGlow 2.2s ease-in-out infinite alternate;
+    }
+    @keyframes breathe{
+      0%,100%{ transform: scale(1) }
+      50%{ transform: scale(1.03) }
+    }
+    @keyframes greenGlow{
+      0%{ filter: drop-shadow(0 0 8px rgba(22,212,95,.35)) }
+      100%{ filter: drop-shadow(0 0 22px rgba(22,212,95,.85)) }
+    }
+
+    /* Моргание красного черепа */
+    .skull--red{
+      animation: blink 1.1s steps(1,end) infinite;
+    }
+    @keyframes blink{
+      0%,60%,100%{ opacity:1; filter: drop-shadow(0 0 10px rgba(239,45,45,.6)) }
+      65%{ opacity:.45; filter: drop-shadow(0 0 2px rgba(239,45,45,.2)) }
+      75%{ opacity:1 }
+      85%{ opacity:.4 }
+    }
+
+    .msg{
+      margin:0 0 18px;
+      font-size:18px;
+      line-height:1.5;
+    }
+    .msg--red{ color:var(--red) }
+    .msg--green{ color:var(--green) }
+
+    .row{
+      display:flex; gap:12px; justify-content:center; flex-wrap:wrap;
+      margin:12px 0 4px;
+    }
+    .btn{
+      background:#121212;
+      border:1px solid var(--border);
+      color:#ddd;
+      padding:10px 16px;
+      border-radius:10px;
+      cursor:pointer;
+      transition:.15s ease;
+      font-weight:600;
+      letter-spacing:.03em;
+    }
+    .btn:hover{ transform: translateY(-1px); border-color:#333 }
+    .btn--red{ color:#fff; background: linear-gradient(180deg, #3a0d0d, #1b0707); border-color:#4b1212 }
+    .btn--green{ color:#fff; background: linear-gradient(180deg, #0d3a20, #071b11); border-color:#144b2a }
+
+    /* Мессенджер (локальный) */
+    .chat{
+      margin:22px auto 4px;
+      text-align:left;
+      background:#0b0b0b;
+      border:1px solid #1a1a1a;
+      border-radius:14px;
+      max-width:760px;
+      overflow:hidden;
+    }
+    .chat-head{
+      padding:10px 14px;
+      border-bottom:1px solid #151515;
+      display:flex; justify-content:space-between; align-items:center;
+      font-weight:700; letter-spacing:.04em;
+    }
+    .chat-body{
+      height:280px;
+      overflow:auto;
+      padding:12px;
+      scroll-behavior:smooth;
+    }
+    .bubble{
+      max-width:82%;
+      margin:8px 0;
+      padding:10px 12px;
+      border-radius:12px;
+      line-height:1.35;
+      word-wrap:break-word;
+      background:#111;
+      border:1px solid #202020;
+      box-shadow:inset 0 0 20px rgba(255,255,255,.02);
+    }
+    .bubble.me{ margin-left:auto; background:#0e2216; border-color:#1b3a28 }
+    .bubble .name{ font-size:12px; opacity:.65; margin-bottom:4px }
+    .bubble .time{ font-size:11px; opacity:.45; margin-left:6px }
+
+    .chat-input{
+      display:flex; gap:10px; padding:10px; border-top:1px solid #151515; background:#0a0a0a;
+    }
+    .chat-input input{
+      flex:1; background:#0c0c0c; color:#e6e6e6; border:1px solid #1b1b1b;
+      border-radius:10px; padding:10px 12px; outline:none;
+    }
+
+    /* бейдж в углу: “вы вошли / не вошли” */
+    .badge{
+      position:absolute; top:12px; right:16px;
+      font-size:12px; padding:6px 10px; border-radius:999px;
+      border:1px solid #1e1e1e; background:#0b0b0b; opacity:.85;
+    }
+    .badge.badge--green{ color:var(--green); border-color:#1b402a }
+    .badge.badge--red{ color:var(--red); border-color:#40201b }
+
+    /* Адаптив */
+    @media (max-width:800px){
+      .wrap{ grid-template-columns: 0 1fr 0 } /* прячем боковые канвы на узких */
+      .chat-body{ height:220px }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="left" class="matrix" aria-hidden="true"></canvas>
+
+    <main class="center">
+      <!-- бейдж -->
+      <div id="badge" class="badge badge--red">Guest: no access</div>
+
+      <!-- карточка не зарегистрирован -->
+      <section id="gate-deny" class="card" hidden>
+        <h2 class="title">TAYK ACCESS</h2>
+        <div class="status">Authorization required</div>
+        <img class="skull skull--red" src="images/skull-red.jpg" alt="Red TAYK Skull"/>
+        <p class="msg msg--red">
+          TAYK Skull denies you access to the site until you are registered.
+        </p>
+        <div class="row">
+          <button id="btnRegister" class="btn btn--red">Register</button>
+        </div>
+      </section>
+
+      <!-- карточка доступ разрешён -->
+      <section id="gate-allow" class="card" hidden>
+        <h2 class="title">WELCOME TO TAYK</h2>
+        <div class="status">Access granted</div>
+        <img class="skull skull--green" src="images/skull-green.jpg" alt="Green TAYK Skull"/>
+        <p class="msg msg--green">
+          TAYK Skull has granted you access to the site, registration was successful :D
+        </p>
+
+        <!-- Мессенджер -->
+        <div class="chat" id="chat">
+          <div class="chat-head">
+            <span>Messenger</span>
+            <button id="logout" class="btn btn--green" title="Log out">Log out</button>
+          </div>
+          <div id="chatBody" class="chat-body"></div>
+          <form id="chatForm" class="chat-input">
+            <input id="chatInput" placeholder="Write a message…" autocomplete="off" />
+            <button class="btn btn--green" type="submit">Send</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <canvas id="right" class="matrix" aria-hidden="true"></canvas>
+  </div>
+
+  <script>
+    /************ Простая “регистрация” в localStorage ************/
+    const KEY_REGISTERED = 'tayk_registered';
+    const KEY_NAME = 'tayk_name';
+    const KEY_CHAT = 'tayk_chat_messages';
+
+    const gateDeny = document.getElementById('gate-deny');
+    const gateAllow = document.getElementById('gate-allow');
+    const badge = document.getElementById('badge');
+    const btnRegister = document.getElementById('btnRegister');
+    const btnLogout = document.getElementById('logout');
+
+    function isRegistered(){ return localStorage.getItem(KEY_REGISTERED) === '1'; }
+
+    function render(){
+      if (isRegistered()){
+        gateDeny.hidden = true;
+        gateAllow.hidden = false;
+        badge.textContent = 'User: access granted';
+        badge.classList.remove('badge--red');
+        badge.classList.add('badge--green');
+      }else{
+        gateDeny.hidden = false;
+        gateAllow.hidden = true;
+        badge.textContent = 'Guest: no access';
+        badge.classList.add('badge--red');
+        badge.classList.remove('badge--green');
+      }
+    }
+
+    btnRegister.addEventListener('click', () => {
+      const name = prompt('Choose a nickname for the chat:','TAYK-user');
+      if(name){
+        localStorage.setItem(KEY_NAME, name.trim().slice(0,24));
+        localStorage.setItem(KEY_REGISTERED, '1');
+        render();
+      }
+    });
+
+    btnLogout.addEventListener('click', () => {
+      localStorage.removeItem(KEY_REGISTERED);
+      render();
+    });
+
+    /************ Локальный мессенджер (сообщения хранятся в браузере) ************/
+    const chatBody = document.getElementById('chatBody');
+    const chatForm = document.getElementById('chatForm');
+    const chatInput = document.getElementById('chatInput');
+
+    function loadMessages(){
+      try{ return JSON.parse(localStorage.getItem(KEY_CHAT) || '[]'); }
+      catch{ return []; }
+    }
+    function saveMessages(list){
+      localStorage.setItem(KEY_CHAT, JSON.stringify(list));
+    }
+    function addMessage(author, text){
+      const list = loadMessages();
+      list.push({author, text, ts: Date.now()});
+      saveMessages(list);
+      paintMessages();
+    }
+    function paintMessages(){
+      const me = localStorage.getItem(KEY_NAME)||'Me';
+      const list = loadMessages();
+      chatBody.innerHTML = '';
+      list.slice(-200).forEach(m=>{
+        const div = document.createElement('div');
+        div.className = 'bubble'+(m.author===me?' me':'');
+        const time = new Date(m.ts).toLocaleTimeString();
+        div.innerHTML = `<div class="name">${m.author}<span class="time">${time}</span></div>${escapeHtml(m.text)}`;
+        chatBody.appendChild(div);
+      });
+      chatBody.scrollTop = chatBody.scrollHeight;
+    }
+    function escapeHtml(s){
+      return s.replace(/[&<>"']/g, c=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[c]));
+    }
+    chatForm.addEventListener('submit', e=>{
+      e.preventDefault();
+      const txt = chatInput.value.trim();
+      if(!txt) return;
+      addMessage(localStorage.getItem(KEY_NAME)||'Me', txt);
+      chatInput.value = '';
+      chatInput.focus();
+    });
+
+    render();
+    paintMessages();
+
+    /************ “Дождь” кода (красный до регистрации, зелёный после) ************/
+    const canvases = [
+      {el: document.getElementById('left'),  dir: -1},
+      {el: document.getElementById('right'), dir:  1},
+    ];
+
+    const glyphs = '0101011011001010010011001010101100110110';
+    const drops = [];
+
+    function resizeCanvas(c){
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio||1));
+      c.width  = c.clientWidth * dpr;
+      c.height = c.clientHeight * dpr;
+      const ctx = c.getContext('2d');
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    function setup(){
+      canvases.forEach(({el})=>{
+        resizeCanvas(el);
+      });
+      drops.length = 0;
+      canvases.forEach(({el}, idx)=>{
+        const cols = Math.ceil(el.clientWidth / 16);
+        drops[idx] = new Array(cols).fill(0).map(()=>Math.random()*-100);
+      });
+    }
+    window.addEventListener('resize', setup);
+    setup();
+
+    function loop(){
+      canvases.forEach(({el,dir}, i)=>{
+        const ctx = el.getContext('2d');
+        const w = el.clientWidth, h = el.clientHeight;
+
+        // фон: лёгкое затухание для "шлейфа"
+        ctx.fillStyle = 'rgba(0,0,0,0.12)';
+        ctx.fillRect(0,0,w,h);
+
+        const registered = isRegistered();
+        ctx.fillStyle = registered ? 'rgba(22,212,95,0.85)' : 'rgba(239,45,45,0.85)';
+        ctx.font = '14px monospace';
+
+        const colW = 16;
+        drops[i] = drops[i] || [];
+
+        for(let x=0; x<drops[i].length; x++){
+          const text = glyphs[Math.floor(Math.random()*glyphs.length)];
+          ctx.fillText(text, x*colW + (dir>0?0:2), drops[i][x] * 16);
+          if(drops[i][x] * 16 > h && Math.random() > 0.975){
+            drops[i][x] = -Math.random()*20;
+          }
+          drops[i][x] += 0.75 + Math.random()*0.25;
+        }
+      });
+
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
